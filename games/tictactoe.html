@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Orbitron', sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; width: 100%; height: 100%; pointer-events: none; }
+        #title { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #00ffff; font-size: 32px; text-shadow: 0 0 10px #00ffff; }
+        #message { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); color: #00ffff; font-size: 24px; }
+        button { padding: 15px 30px; font-size: 20px; background-color: #00ffff; color: #000000; border: none; border-radius: 30px; cursor: pointer; font-family: 'Orbitron', sans-serif; text-transform: uppercase; letter-spacing: 2px; transition: all 0.3s ease; pointer-events: auto; }
+        button:hover { background-color: #ffffff; box-shadow: 0 0 20px #00ffff; }
+        #reset { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); }
+        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; flex-direction: column; opacity: 0; transition: opacity 0.5s ease; pointer-events: none; }
+        #overlay.active { opacity: 1; pointer-events: auto; }
+        #win-message { color: #00ffff; font-size: 48px; text-shadow: 0 0 20px #00ffff; margin-bottom: 20px; }
+        #new-game { margin-top: 20px; }
+        #player-name { position: absolute; top: 120px; left: 50%; transform: translateX(-50%);pointer-events: auto; }
+        #player-name input { padding: 10px; font-size: 18px; font-family: 'Orbitron', sans-serif; background-color: #000000; color: #00ffff; border: 2px solid #00ffff; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div id="title">3D Tic-Tac-Toe</div>
+        <div id="message"></div>
+        <div id="player-name">
+            <input type="text" id="name-input-1" placeholder="Enter your name" value="Player1">
+            <input type="text" id="name-input-2" placeholder="Enter your name" value="Player2">
+        </div>
+        <button id="reset" onclick="resetGame()">Reset Game</button>
+    </div>
+    <div id="overlay">
+        <div id="win-message"></div>
+        <button id="new-game" onclick="newGame()">New Game</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+    <script>
+        let scene, camera, renderer, grid;
+        const SIZE = 3;
+        let currentPlayer = 'X';
+        let gameBoard = Array(SIZE * SIZE).fill('');
+        let gameActive = true;
+        let playerName1 = "Player1";
+        let playerName2 = "Player2";
+
+        const tapSound = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            createGrid();
+            
+            camera.position.set(0, 5, 0);
+            camera.lookAt(0, 0, 0);
+
+            animate();
+        }
+
+        function createGrid() {
+            grid = new THREE.Group();
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE; j++) {
+                    const geometry = new THREE.BoxGeometry(0.9, 0.1, 0.9);
+                    const material = new THREE.MeshPhongMaterial({ 
+                        color: 0x00ffff,
+                        specular: 0xffffff,
+                        shininess: 100,
+                        transparent: true,
+                        opacity: 0.5
+                    });
+                    const cell = new THREE.Mesh(geometry, material);
+                    cell.position.set(i - 1, 0, j - 1);
+                    cell.castShadow = true;
+                    cell.receiveShadow = true;
+                    grid.add(cell);
+                }
+            }
+            scene.add(grid);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Create starfield background
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsMaterial = new THREE.PointsMaterial({color: 0xffffff});
+
+            const starsVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = -Math.random() * 2000;
+                starsVertices.push(x, y, z);
+            }
+
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            const starField = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(starField);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            TWEEN.update();
+            renderer.render(scene, camera);
+        }
+
+        function onCellClick(event) {
+            if (!gameActive) return;
+
+            const mouse = new THREE.Vector2();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(grid.children);
+
+            if (intersects.length > 0) {
+                const clickedCell = intersects[0].object;
+                const cellIndex = grid.children.indexOf(clickedCell);
+
+                if (gameBoard[cellIndex] === '') {
+                    gameBoard[cellIndex] = currentPlayer;
+                    updateCell(clickedCell, currentPlayer);
+                    provideHapticFeedback(clickedCell);
+
+                    if (checkWinner(currentPlayer)) {
+                        gameActive = false;
+                        showWinningLine();
+                        setTimeout(() => {
+                            if (currentPlayer === 'O') {
+                                showWinMessage(`${playerName2} wins!`);
+                            }
+                            if (currentPlayer === 'X') {
+                                showWinMessage(`${playerName1} wins!`);
+                            }
+                            
+                        }, 1000);
+                    } else if (gameBoard.every(cell => cell !== '')) {
+                        gameActive = false;
+                        showWinMessage("It's a draw!");
+                    } else {
+                        currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                        // if (currentPlayer === 'O') {
+                        //     setTimeout(computerMove, 50);
+                        // }
+                    }
+                }
+            }
+        }
+
+        function updateCell(cell, player) {
+            playerName1 = document.getElementById('name-input-1').value || "Player1";
+            playerName2 = document.getElementById('name-input-2').value || "Player2";
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+                const textGeometry = new THREE.TextGeometry(player, {
+                    font: font,
+                    size: 0.5,
+                    height: 0.1,
+                });
+                const textMaterial = new THREE.MeshPhongMaterial({ color: player === 'X' ? 0xff00ff : 0x00ffff });
+                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                textMesh.position.set(-0.18, 0, 0.18);
+                textMesh.rotation.x = -Math.PI / 2;
+                cell.add(textMesh);
+            });
+            playTapSound();
+        }
+
+        function provideHapticFeedback(cell) {
+            const originalY = cell.position.y;
+            new TWEEN.Tween(cell.position)
+                .to({ y: originalY + 0.2 }, 100)
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .onComplete(() => {
+                    new TWEEN.Tween(cell.position)
+                        .to({ y: originalY }, 100)
+                        .easing(TWEEN.Easing.Quadratic.In)
+                        .start();
+                })
+                .start();
+
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+        }
+
+        function playTapSound() {
+            tapSound.play();
+        }
+
+        function checkWinner(player) {
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                [0, 4, 8], [2, 4, 6] // Diagonals
+            ];
+
+            return winPatterns.some(pattern =>
+                pattern.every(index => gameBoard[index] === player)
+            );
+        }
+
+        function showWinningLine() {
+            const winPatterns = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                [0, 4, 8], [2, 4, 6] // Diagonals
+            ];
+
+            const winningPattern = winPatterns.find(pattern =>
+                pattern.every(index => gameBoard[index] === currentPlayer)
+            );
+
+            if (winningPattern) {
+                const start = grid.children[winningPattern[0]].position;
+                const end = grid.children[winningPattern[2]].position;
+
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+                const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 5 });
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                line.position.y = 0.2;
+                scene.add(line);
+            }
+        }
+
+        function computerMove() {
+            if (!gameActive) return;
+
+            const emptyCells = gameBoard.reduce((acc, cell, index) => {
+                if (cell === '') acc.push(index);
+                return acc;
+            }, []);
+
+            if (emptyCells.length > 0) {
+                const randomIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                gameBoard[randomIndex] = 'O';
+                updateCell(grid.children[randomIndex], 'O');
+                provideHapticFeedback(grid.children[randomIndex]);
+
+                if (checkWinner('O')) {
+                    gameActive = false;
+                    showWinningLine();
+                    setTimeout(() => {
+                        showWinMessage('Computer wins!');
+                    }, 1000);
+                } else if (gameBoard.every(cell => cell !== '')) {
+                    gameActive = false;
+                    showWinMessage("It's a draw!");
+                } else {
+                    currentPlayer = 'X';
+                }
+            }
+        }
+
+        function showWinMessage(msg) {
+            document.getElementById('win-message').textContent = msg;
+            document.getElementById('overlay').classList.add('active');
+            createFireworks();
+        }
+
+        function createFireworks() {
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const firework = document.createElement('div');
+                    firework.style.position = 'absolute';
+                    firework.style.width = '5px';
+                    firework.style.height = '5px';
+                    firework.style.borderRadius = '50%';
+                    firework.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                    firework.style.left = `${Math.random() * 100}%`;
+                    firework.style.top = `${Math.random() * 100}%`;
+                    firework.style.animation = `firework 1s ease-out`;
+                    document.getElementById('overlay').appendChild(firework);
+                    setTimeout(() => firework.remove(), 1000);
+                }, Math.random() * 2000);
+            }
+        }
+
+        function resetGame() {
+            gameBoard = Array(SIZE * SIZE).fill('');
+            gameActive = true;
+            currentPlayer = 'X';
+            document.getElementById('message').textContent = '';
+            document.getElementById('overlay').classList.remove('active');
+            grid.children.forEach(cell => {
+                while(cell.children.length > 0) {
+                    cell.remove(cell.children[0]);
+                }
+            });
+            scene.children = scene.children.filter(child => !(child instanceof THREE.Line));
+        }
+
+        function newGame() {
+            playerName1 = document.getElementById('name-input-1').value || "Player1";
+            playerName2 = document.getElementById('name-input-2').value || "Player2";
+            resetGame();
+            resetGame();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+        window.addEventListener('click', onCellClick);
+        window.addEventListener('resize', onWindowResize);
+    </script>
+</body>
+</html>
